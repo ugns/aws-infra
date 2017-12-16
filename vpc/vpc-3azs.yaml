@@ -332,7 +332,7 @@ Resources:
       Protocol: -1
       RuleAction: allow
       Egress: false
-      CidrBlock: '::/0'
+      Ipv6CidrBlock: '::/0'
 
   NetworkAclEntryOutPublicAllowAllv6:
     Type: AWS::EC2::NetworkAclEntry
@@ -342,7 +342,7 @@ Resources:
       Protocol: -1
       RuleAction: allow
       Egress: true
-      CidrBlock: '::/0'
+      Ipv6CidrBlock: '::/0'
 
   NetworkAclEntryInPrivateAllowVPC:
     Type: AWS::EC2::NetworkAclEntry
@@ -372,7 +372,7 @@ Resources:
       Protocol: -1
       RuleAction: allow
       Egress: false
-      CidrBlock: '::/0'
+      Ipv6CidrBlock: '::/0'
 
   NetworkAclEntryOutPrivateAllowv6VPC:
     Type: AWS::EC2::NetworkAclEntry
@@ -382,7 +382,7 @@ Resources:
       Protocol: -1
       RuleAction: allow
       Egress: true
-      CidrBlock: '::/0'
+      Ipv6CidrBlock: '::/0'
 
 Outputs:
   StackName:
