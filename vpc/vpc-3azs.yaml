@@ -9,6 +9,7 @@ Metadata:
         default: 'VPC Parameters'
       Parameters:
       - ClassB
+      - DualStack
 
 Parameters:
   ClassB:
@@ -18,6 +19,17 @@ Parameters:
     ConstraintDescription: 'Must be in the range [0-255]'
     MinValue: 0
     MaxValue: 255
+
+  DualStack:
+    Description: 'Request IPv6 CIDR block'
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  DualStacked: !Equals [!Ref DualStack, 'true']
 
 Resources:
   VPC:
@@ -30,6 +42,13 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '10.${ClassB}.0.0/16'
+
+  VPCv6CIDR:
+    Condition: DualStacked
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      AmazonProvidedIpv6CidrBlock: !Ref DualStack
+      VpcId: !Ref VPC
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -325,6 +344,7 @@ Resources:
       CidrBlock: '0.0.0.0/0'
 
   NetworkAclEntryInPublicAllowAllv6:
+    Condition: DualStacked
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref NetworkAclPublic
@@ -335,6 +355,7 @@ Resources:
       Ipv6CidrBlock: '::/0'
 
   NetworkAclEntryOutPublicAllowAllv6:
+    Condition: DualStacked
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref NetworkAclPublic
@@ -365,6 +386,7 @@ Resources:
       CidrBlock: '0.0.0.0/0'
 
   NetworkAclEntryInPrivateAllowv6VPC:
+    Condition: DualStacked
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref NetworkAclPrivate
@@ -375,6 +397,7 @@ Resources:
       Ipv6CidrBlock: '::/0'
 
   NetworkAclEntryOutPrivateAllowv6VPC:
+    Condition: DualStacked
     Type: AWS::EC2::NetworkAclEntry
     Properties:
       NetworkAclId: !Ref NetworkAclPrivate
