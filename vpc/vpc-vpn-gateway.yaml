@@ -1,0 +1,122 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VPC: Static Site-to-Site VPN Connection'
+
+Metadata:
+  AWS:CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Parent Stacks'
+        Parameters:
+          - ParentVPCStack
+      - Label:
+          Default: 'VPN Parameters'
+        Parameters:
+          - RemoteVpnDeviceIp
+          - RemoteNetworkCidr
+
+Parameters:
+  ParentVPCStack:
+    Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
+    Type: String
+
+  RemoteVpnDeviceIp:
+    Description: 'External IP address of the Customer VPN Device.'
+    Type: String
+    MinLength: 7
+    MaxLength: 12
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})"
+    ConstraintDescription: Must be a valid IP address x.x.x.x
+
+  RemoteNetworkCidr:
+    Description: 'Remote Network IP Range CIDR (i.e. 192.168.100.0/24).'
+    Type: String
+    MinLength: 11
+    MaxLength: 18
+    Default: 192.168.100.0/24
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: Must be a valid CIDR range of the form x.x.x./x.
+
+Resources:
+  VPNGateway:
+    Type: AWS::EC2::VPNGateway
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Name
+          Value: !Sub 'VPN Gateway (${AWS::StackName})'
+
+  VPNGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+      VpnGatewayId: !Ref VPNGateway
+
+  CustomerGateway:
+    Type: AWS::EC2::CustomerGateway
+    Properties:
+      Type: ipsec.1
+      BgpAsn: 65000
+      IpAddress: !Ref RemoteVpnDeviceIp
+      Tags:
+        - Key: Name
+          Value: !Sub 'Customer Gateway (${AWS::StackName})'
+
+  VPNConnection:
+    DependsOn:
+      - CustomerGateway
+      - VPNGateway
+    Type: AWS::EC2::VPNConnection
+    Properties:
+      Type: ipsec.1
+      StaticRoutesOnly: 'true'
+      CustomerGatewayId: !Ref CustomerGateway
+      VpnGatewayId: !Ref VPNGateway
+      Tags:
+        - Key: Name
+          Value: !Sub 'VPN Connection (${AWS::StackName})'
+
+  VPNStaticRoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::VPNConnectionRoute
+    Properties:
+      DestinationCidrBlock: !Ref RemoteNetworkCidr
+      VpnConnectionId: !Ref VPNConnection
+
+  PrivateARoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref RemoteNetworkCidr
+      GatewayId: !Ref VPNGateway
+      RouteTableId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableAPrivate'
+
+  PrivateBRoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref RemoteNetworkCidr
+      GatewayId: !Ref VPNGateway
+      RouteTableId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableBPrivate'
+
+  PrivateCRoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Ref RemoteNetworkCidr
+      GatewayId: !Ref VPNGateway
+      RouteTableId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableCPrivate'
+
+Outputs:
+  StackName:
+    Description: 'Stack name'
+    Value: !Sub '${AWS::StackName}'
+
