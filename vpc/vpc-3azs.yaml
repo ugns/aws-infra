@@ -324,6 +324,26 @@ Resources:
       Egress: true
       CidrBlock: '0.0.0.0/0'
 
+  NetworkAclEntryInPublicAllowAllv6:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NetworkAclPublic
+      RuleNumber: 101
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '::/0'
+
+  NetworkAclEntryOutPublicAllowAllv6:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NetworkAclPublic
+      RuleNumber: 101
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '::/0'
+
   NetworkAclEntryInPrivateAllowVPC:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -343,6 +363,26 @@ Resources:
       RuleAction: allow
       Egress: true
       CidrBlock: '0.0.0.0/0'
+
+  NetworkAclEntryInPrivateAllowv6VPC:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NetworkAclPrivate
+      RuleNumber: 101
+      Protocol: -1
+      RuleAction: allow
+      Egress: false
+      CidrBlock: '::/0'
+
+  NetworkAclEntryOutPrivateAllowv6VPC:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NetworkAclPrivate
+      RuleNumber: 101
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: '::/0'
 
 Outputs:
   StackName:
@@ -397,7 +437,7 @@ Outputs:
   SubnetsPublic:
     Description: 'Subnets public.'
     Value:
-      Fn::Join: 
+      Fn::Join:
         - ','
         - - !Ref SubnetAPublic
           - !Ref SubnetBPublic
@@ -408,7 +448,7 @@ Outputs:
   SubnetsPrivate:
     Description: 'Subnets private.'
     Value:
-      Fn::Join: 
+      Fn::Join:
         - ','
         - - !Ref SubnetAPrivate
           - !Ref SubnetBPrivate
@@ -419,7 +459,7 @@ Outputs:
   RouteTablesPrivate:
     Description: 'Route tables private.'
     Value:
-      Fn::Join: 
+      Fn::Join:
         - ','
         - - !Ref RouteTableAPrivate
           - !Ref RouteTableBPrivate
@@ -430,7 +470,7 @@ Outputs:
   RouteTablesPublic:
     Description: 'Route tables public.'
     Value:
-      Fn::Join: 
+      Fn::Join:
         - ','
         - - !Ref RouteTableAPublic
           - !Ref RouteTableBPublic
