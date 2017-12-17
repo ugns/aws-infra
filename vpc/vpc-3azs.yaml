@@ -1,5 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
+
 Description: 'VPC: public and private subnets in three availability zones'
 
 Metadata:
