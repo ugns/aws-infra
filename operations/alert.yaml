@@ -56,29 +56,29 @@ Resources:
         Id: Id1
         Version: '2012-10-17'
         Statement:
-        - Sid: Sid1
-          Effect: Allow
-          Principal:
-            Service:
-            - 'events.amazonaws.com'
-            - 'budgets.amazonaws.com'
-            - 'rds.amazonaws.com'
-            - 's3.amazonaws.com'
-          Action:
-            - sns:Publish
-          Resource: !Ref Topic
-        - Sid: Sid2
-          Effect: Allow
-          Principal:
-            AWS: '*'
-          Action:
-            - sns:Publish
-          Resource: !Ref Topic
-          Condition:
-            StringEquals:
-              'AWS:SourceOwner': !Ref 'AWS::AccountId'
+          - Sid: Sid1
+            Effect: Allow
+            Principal:
+              Service:
+                - 'events.amazonaws.com'
+                - 'budgets.amazonaws.com'
+                - 'rds.amazonaws.com'
+                - 's3.amazonaws.com'
+            Action:
+              - sns:Publish
+            Resource: !Ref Topic
+          - Sid: Sid2
+            Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - sns:Publish
+            Resource: !Ref Topic
+            Condition:
+              StringEquals:
+                'AWS:SourceOwner': !Ref 'AWS::AccountId'
       Topics:
-      - !Ref Topic
+        - !Ref Topic
 
   FallbackTopic:
     Type: AWS::SNS::Topic
