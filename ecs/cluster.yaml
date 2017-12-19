@@ -191,8 +191,12 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 'ec2.amazonaws.com'
+              Service:
+                - 'ec2.amazonaws.com'
+                - 'ssm.amazonaws.com'
             Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
       Path: /
       Policies:
         - PolicyName: ecs
@@ -202,6 +206,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ecs:DiscoverPollEndpoint
+                  - ecs:StartTask
                 Resource: '*'
         - PolicyName: ecs-cluster
           PolicyDocument:
@@ -229,7 +234,7 @@ Resources:
                 Resource: !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container-instance/*'
                 Condition:
                   'StringEquals':
-                    'ecs:cluster': !GetAtt Cluster.Arn
+                    'ecs:cluster': !GetAtt 'Cluster.Arn'
         - PolicyName: ecr
           PolicyDocument:
             Version: '2012-10-17'
@@ -462,7 +467,11 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
-          default: [awslogs, install]
+          default: [ssm, awslogs, install]
+        ssm:
+          packages:
+            rpm:
+              amazon-ssm-agent: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
         awslogs:
           packages:
             yum:
