@@ -272,6 +272,16 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
       VpcId: !Ref VPC
 
+  EndpointDynamoDB:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - !Ref RouteTableAPrivate
+        - !Ref RouteTableBPrivate
+        - !Ref RouteTableCPrivate
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.dynamodb'
+      VpcId: !Ref VPC
+
   NetworkAclPublic:
     Type: AWS::EC2::NetworkAcl
     Properties:
