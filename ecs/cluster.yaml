@@ -16,6 +16,8 @@ Metadata:
         default: 'EC2 Parameters'
       Parameters:
         - KeyName
+        - DockerAuthType
+        - DockerAuthData
 
     - Label:
         default: 'Load Balancer Parameters'
@@ -27,6 +29,7 @@ Metadata:
         default: 'Cluster Parameters'
       Parameters:
         - InstanceType
+        - SpotPrice
         - LogsRetentionInDays
         - MaxSize
         - MinSize
@@ -56,13 +59,28 @@ Parameters:
     Type: String
     Default: ''
 
+  DockerAuthType:
+    Description: 'Optional Docker format for private registry authentication.'
+    Type: String
+    Default: ''
+    AllowedValues:
+      - ''
+      - 'dockercfg'
+      - 'docker'
+
+  DockerAuthData:
+    Description: 'Optional Docker private registry authentication JSON data'
+    Type: String
+    # NoEcho: true
+    Default: ''
+
   LoadBalancerScheme:
     Description: 'Indicates whether the load balancer in front of the ECS cluster is internet-facing or internal.'
     Type: String
     Default: 'internet-facing'
     AllowedValues:
-    - 'internet-facing'
-    - internal
+      - 'internet-facing'
+      - internal
 
   LoadBalancerCertificateArn:
     Description: 'Optional Amazon Resource Name (ARN) of the certificate to associate with the load balancer.'
@@ -73,6 +91,11 @@ Parameters:
     Description: 'The instance type of the EC2 instances of the ECS cluster.'
     Type: String
     Default: 't2.micro'
+
+  SpotPrice:
+    Description: 'Optional Spot Price to run the EC2 instances of the ECS cluster.'
+    Type: String
+    Default: ''
 
   LogsRetentionInDays:
     Description: 'Specifies the number of days you want to retain log events in the specified log group.'
@@ -135,36 +158,43 @@ Parameters:
 
 Mappings:
   RegionMap:
-    'eu-west-2':
-      ECSAMI: 'ami-dbfee1bf'
-    'eu-west-1':
-      ECSAMI: 'ami-4cbe0935'
-    'ap-northeast-2':
-      ECSAMI: 'ami-7267c01c'
-    'ap-northeast-1':
-      ECSAMI: 'ami-56bd0030'
-    'ca-central-1':
-      ECSAMI: 'ami-918b30f5'
-    'ap-southeast-1':
-      ECSAMI: 'ami-1bdc8b78'
-    'ap-southeast-2':
-      ECSAMI: 'ami-14b55f76'
-    'eu-central-1':
-      ECSAMI: 'ami-05991b6a'
-    'us-east-1':
-      ECSAMI: 'ami-fad25980'
-    'us-east-2':
-      ECSAMI: 'ami-58f5db3d'
-    'us-west-1':
-      ECSAMI: 'ami-62e0d802'
-    'us-west-2':
-      ECSAMI: 'ami-7114c909'
+    ap-south-1:
+      ECSAMI: ami-f4b88a9b
+    eu-west-3:
+      ECSAMI: ami-e976c694
+    eu-west-2:
+      ECSAMI: ami-2e9866c5
+    eu-west-1:
+      ECSAMI: ami-39d530d4
+    ap-northeast-2:
+      ECSAMI: ami-8f44f3e1
+    ap-northeast-1:
+      ECSAMI: ami-7d0c7a90
+    sa-east-1:
+      ECSAMI: ami-a2c6e7ce
+    ca-central-1:
+      ECSAMI: ami-c1b63ba5
+    ap-southeast-1:
+      ECSAMI: ami-ae1b5a44
+    ap-southeast-2:
+      ECSAMI: ami-706cca12
+    eu-central-1:
+      ECSAMI: ami-9fe2e074
+    us-east-1:
+      ECSAMI: ami-644a431b
+    us-east-2:
+      ECSAMI: ami-79d8e21c
+    us-west-1:
+      ECSAMI: ami-4351bc20
+    us-west-2:
+      ECSAMI: ami-f189d189
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   HasLoadBalancerSchemeInternal: !Equals [!Ref LoadBalancerScheme, 'internal']
   HasLoadBalancerCertificateArn: !Not [!Equals [!Ref LoadBalancerCertificateArn, '']]
   HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
+  HasSpotPrice: !Not [!Equals [!Ref SpotPrice, '']]
 
 Resources:
   Cluster:
@@ -762,6 +792,7 @@ Resources:
       SecurityGroups:
         - !Ref SecurityGroup
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      SpotPrice: !If [HasSpotPrice, !Ref SpotPrice, !Ref 'AWS::NoValue']
       UserData:
         'Fn::Base64': !Sub |
           #!/bin/bash -x
@@ -772,7 +803,9 @@ Resources:
             mkdir /mnt/efs
             mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /mnt/efs/
             chmod 1777 /mnt/efs
-            echo "ECS_CLUSTER=${Cluster}" >> /etc/ecs/ecs.config
+            echo 'ECS_CLUSTER=${Cluster}' > /etc/ecs/ecs.config
+            echo 'ECS_ENGINE_AUTH_TYPE=${DockerAuthType}' >> /etc/ecs/ecs.config
+            echo 'ECS_ENGINE_AUTH_DATA=${DockerAuthData}' >> /etc/ecs/ecs.config
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
           TRY
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
@@ -785,7 +818,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       LaunchConfigurationName: !Ref LaunchConfiguration
-      MinSize: !Ref MinSize
+      MinSize: !If [HasSpotPrice, 0, !Ref MinSize]
       MaxSize: !Ref MaxSize
       DesiredCapacity: !Ref DesiredCapacity
       HealthCheckGracePeriod: 300
@@ -814,7 +847,7 @@ Resources:
     UpdatePolicy:
       AutoScalingRollingUpdate:
         PauseTime: PT15M
-        MinInstancesInService: 1
+        MinInstancesInService: !If [HasSpotPrice, 0, !Ref MinSize]
         SuspendProcesses:
           - HealthCheck
           - ReplaceUnhealthy
