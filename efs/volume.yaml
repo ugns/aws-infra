@@ -1,0 +1,185 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'EFS: Elastic File System volume'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: 'Parent Stacks'
+      Parameters:
+        - ParentVPCStack
+        - ParentAlertStack
+
+    - Label:
+        default: 'EFS Parameters'
+      Parameters:
+        - Encryption
+        - KeyRotation
+        - PerformanceMode
+
+Parameters:
+  ParentVPCStack:
+    Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
+    Type: String
+
+  ParentAlertStack:
+    Description: 'Optional but recommended stack name of parent alert stack based on operations/alert.yaml template.'
+    Type: String
+    Default: ''
+
+  Encryption:
+    Description: 'Enable server side encryption using KMS (customer managed) CMK.'
+    Type: String
+    Default: false
+    AllowedValues: [true, false]
+
+  KeyRotation:
+    Description: 'Enable automatic KMS key rotation.'
+    Type: String
+    Default: false
+    AllowedValues: [true, false]
+
+  PerformanceMode:
+    Description: 'Performance mode of the file system.'
+    Type: String
+    Default: generalPurpose
+    AllowedValues: [generalPurpose, maxIO]
+
+Conditions:
+  HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
+  HasEncryption: !Equals [!Ref Encryption, true]
+
+Resources:
+  Key:
+    Condition: HasEncryption
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: !Ref KeyRotation
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: 'kms:*'
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:ListGrants'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:CallerAccount': !Ref 'AWS::AccountId'
+                'kms:ViaService': !Sub "elasticfilesystem.${AWS::Region}.amazonaws.com"
+
+  KeyAlias:
+    Condition: HasEncryption
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}"
+      TargetKeyId: !Ref Key
+
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: !If [HasEncryption, !Ref Encryption, !Ref 'AWS::NoValue']
+      FileSystemTags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-efs'
+      KmsKeyId: !If [HasEncryption, !Ref Key, !Ref 'AWS::NoValue']
+      PerformanceMode: !Ref PerformanceMode
+
+  FileSystemPercentIOLimitTooHighAlarm:
+    Condition: HasAlertTopic
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'Average IO utilization over last 10 minutes higher than 80%'
+      Namespace: 'AWS/EFS'
+      MetricName: PercentIOLimit
+      Statistic: Average
+      Period: 600
+      EvaluationPeriods: 1
+      ComparisonOperator: GreaterThanThreshold
+      Threshold: 80
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystem
+
+  FileSystemBurstCreditBalanceTooLowAlarm:
+    Condition: HasAlertTopic
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: 'EFS file system is running out of burst credits. You can expect a significant performance trop in the next hour.'
+      Namespace: 'AWS/EFS'
+      MetricName: BurstCreditLimit
+      Statistic: Average
+      Period: 600
+      EvaluationPeriods: 1
+      ComparisonOperator: LessThanThreshold
+      Threshold: 192416666667
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+      Dimensions:
+        - Name: FileSystemId
+          Value: !Ref FileSystem
+
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetAPrivate'
+      SecurityGroups:
+        - !Ref SecurityGroup
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetBPrivate'
+      SecurityGroups:
+        - !Ref SecurityGroup
+
+  MountTargetC:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetCPrivate'
+      SecurityGroups:
+        - !Ref SecurityGroup
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allowing access to EFS
+      VpcId:
+        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+
+Outputs:
+  StackName:
+    Description: 'Stack name'
+    Value: !Sub '${AWS::StackName}'
+
+  SecurityGroup:
+    Description: 'Security Group of EFS volume.'
+    Value: !Ref SecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'
+
+  FileSystem:
+    Description: 'The Elastic File System volume name.'
+    Value: !Ref FileSystem
