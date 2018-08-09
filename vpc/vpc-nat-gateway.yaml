@@ -50,13 +50,13 @@ Resources:
     Properties:
       AllocationId: !GetAtt 'EIP.AllocationId'
       SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-Subnet${SubnetZone}Public'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-Subnet${SubnetZone}Public"
 
   Route:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTable${SubnetZone}Private'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTable${SubnetZone}Private"
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway
 
@@ -64,7 +64,7 @@ Resources:
     Condition: HasAlertTopic
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: !Sub 'NAT gateway ${SubnetZone} could not allocate a source port'
+      AlarmDescription: !Sub "NAT gateway ${SubnetZone} could not allocate a source port"
       Namespace: 'AWS/NATGateway'
       MetricName: ErrorPortAllocation
       Statistic: Sum
@@ -73,7 +73,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: NatGatewayId
           Value: !Ref NatGateway
@@ -82,7 +82,7 @@ Resources:
     Condition: HasAlertTopic
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: !Sub 'NAT gateway ${SubnetZone} dropped packets'
+      AlarmDescription: !Sub "NAT gateway ${SubnetZone} dropped packets"
       Namespace: 'AWS/NATGateway'
       MetricName: PacketsDropCount
       Statistic: Sum
@@ -91,7 +91,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: NatGatewayId
           Value: !Ref NatGateway
@@ -99,10 +99,10 @@ Resources:
 Outputs:
   StackName:
     Description: 'Stack name.'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'
 
   IPAddress:
     Description: 'The public IP address of the NAT gateway.'
     Value: !Ref EIP
     Export:
-      Name: !Sub '${AWS::StackName}-IPAddress'
+      Name: !Sub "${AWS::StackName}-IPAddress"

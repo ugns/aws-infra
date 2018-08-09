@@ -55,13 +55,13 @@ Resources:
       Type: ipsec.1
       Tags:
         - Key: Name
-          Value: !Sub 'VPN Gateway (${AWS::StackName})'
+          Value: !Sub "VPN Gateway (${AWS::StackName})"
 
   VPNGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
       VpnGatewayId: !Ref VPNGateway
 
   CustomerGateway:
@@ -72,7 +72,7 @@ Resources:
       IpAddress: !Ref RemoteVpnDeviceIp
       Tags:
         - Key: Name
-          Value: !Sub 'Customer Gateway (${AWS::StackName})'
+          Value: !Sub "Customer Gateway (${AWS::StackName})"
 
   VPNConnection:
     DependsOn:
@@ -86,7 +86,7 @@ Resources:
       VpnGatewayId: !Ref VPNGateway
       Tags:
         - Key: Name
-          Value: !Sub 'VPN Connection (${AWS::StackName})'
+          Value: !Sub "VPN Connection (${AWS::StackName})"
 
   VPNStaticRoute:
     DependsOn:
@@ -104,7 +104,7 @@ Resources:
       DestinationCidrBlock: !Ref RemoteNetworkCidr
       GatewayId: !Ref VPNGateway
       RouteTableId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableAPrivate'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableAPrivate"
 
   PrivateBRoute:
     DependsOn:
@@ -114,7 +114,7 @@ Resources:
       DestinationCidrBlock: !Ref RemoteNetworkCidr
       GatewayId: !Ref VPNGateway
       RouteTableId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableBPrivate'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableBPrivate"
 
   PrivateCRoute:
     DependsOn:
@@ -124,13 +124,13 @@ Resources:
       DestinationCidrBlock: !Ref RemoteNetworkCidr
       GatewayId: !Ref VPNGateway
       RouteTableId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableCPrivate'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableCPrivate"
 
   AlarmVpnConnectionTunnelState:
     Condition: HasAlertTopic
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: !Sub 'VPN Connection ${VPNConnection} tunnel state down'
+      AlarmDescription: !Sub "VPN Connection ${VPNConnection} tunnel state down"
       Namespace: 'AWS/VPN'
       MetricName: TunnelState
       Statistic: Maximum
@@ -139,7 +139,7 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Threshold: 1
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: VpnId
           Value: !Ref VPNConnection
@@ -147,4 +147,4 @@ Resources:
 Outputs:
   StackName:
     Description: 'Stack name'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'

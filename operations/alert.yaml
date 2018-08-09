@@ -137,10 +137,10 @@ Resources:
 Outputs:
   StackName:
     Description: 'Stack name'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'
 
   TopicARN:
     Description: 'The ARN of the alert topic.'
     Value: !Ref Topic
     Export:
-      Name: !Sub '${AWS::StackName}-TopicARN'
+      Name: !Sub "${AWS::StackName}-TopicARN"
