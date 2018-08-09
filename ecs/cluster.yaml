@@ -10,6 +10,7 @@ Metadata:
         default: 'Parent Stacks'
       Parameters:
         - ParentVPCStack
+        - ParentEFSStack
         - ParentAlertStack
 
     - Label:
@@ -50,6 +51,11 @@ Parameters:
     Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
     Type: String
 
+  ParentEFSStack:
+    Description: 'Optional but recommended stack name of parent EFS stack based on efs/volume.yaml template.'
+    Type: String
+    Default: ''
+
   ParentAlertStack:
     Description: 'Optional but recommended stack name of parent alert stack based on operations/alert.yaml template.'
     Type: String
@@ -57,7 +63,7 @@ Parameters:
 
   KeyName:
     Description: 'Optional key pair of the ec2-user to establish a SSH connection to the EC2 instances of the ECS cluster.'
-    Type: String
+    Type: AWS::EC2::KeyPair::KeyName
     Default: ''
 
   DockerAuthType:
@@ -199,6 +205,7 @@ Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
   HasLoadBalancerSchemeInternal: !Equals [!Ref LoadBalancerScheme, 'internal']
   HasLoadBalancerCertificateArn: !Not [!Equals [!Ref LoadBalancerCertificateArn, '']]
+  HasEFSVolume: !Not [!Equals [!Ref ParentEFSStack, '']]
   HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
   HasSpotPrice: !Not [!Equals [!Ref SpotPrice, '']]
 
@@ -267,7 +274,7 @@ Resources:
                   - ecs:UpdateContainerInstancesState
                   - ecs:ListTasks
                   - ecs:DescribeContainerInstances
-                Resource: !Sub 'arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container-instance/*'
+                Resource: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container-instance/*"
                 Condition:
                   'StringEquals':
                     'ecs:cluster': !GetAtt 'Cluster.Arn'
@@ -292,7 +299,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:*:*'
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:*:*"
         - PolicyName: autoscaling
           PolicyDocument:
             Version: '2012-10-17'
@@ -316,7 +323,7 @@ Resources:
     Properties:
       GroupDescription: 'ecs-cluster-alb'
       VpcId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
 
   ALBSecurityGroupInHttpWorld:
     Type: AWS::EC2::SecurityGroupIngress
@@ -342,7 +349,7 @@ Resources:
     Properties:
       GroupDescription: 'ecs-cluster'
       VpcId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref ALBSecurityGroup
           FromPort: 0
@@ -371,7 +378,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
@@ -391,7 +398,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
@@ -411,7 +418,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
@@ -431,7 +438,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
@@ -470,7 +477,7 @@ Resources:
       Port: 80
       Protocol: HTTP
       VpcId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
       TargetGroupAttributes:
         - Key: 'deregistration_delay.timeout_seconds'
           Value: 0
@@ -503,11 +510,37 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
-          default: [ssm, awslogs, install, anchore]
+          default:
+            - ssm
+            - awslogs
+            - !If [HasEFSVolume, efsmount, !Ref 'AWS::NoValue']
+            - ecs
+            - install
+            - anchore
         ssm:
           packages:
             rpm:
               amazon-ssm-agent: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+        efsmount:
+          packages:
+            yum:
+              'nfs-utils': []
+          commands:
+            a_mountpoint_mkdir:
+              command: 'mkdir /mnt/efs'
+              test: '[ ! -d /mnt/efs ]'
+            b_mountpoint_mount:
+              command: !Sub
+                - 'while ! (echo > /dev/tcp/${EFSVolume}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 10; done && sleep 10 && mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 "${EFSVolume}.efs.${AWS::Region}.amazonaws.com:/" /mnt/efs && chmod 1777 /mnt/efs'
+                - EFSVolume: !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-FileSystem"}, '']
+              test: 'if mount | grep -q /mnt/efs; then exit 1; else exit 0; fi'
+        ecs:
+          files:
+            /etc/ecs/ecs.config:
+              content: !Sub |
+                ECS_CLUSTER=${Cluster}
+                ECS_ENGINE_AUTH_TYPE=${DockerAuthType}
+                ECS_ENGINE_AUTH_DATA=${DockerAuthData}
         awslogs:
           packages:
             yum:
@@ -820,6 +853,7 @@ Resources:
       InstanceType: !Ref InstanceType
       SecurityGroups:
         - !Ref SecurityGroup
+        - !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-SecurityGroup"}, !Ref 'AWS::NoValue']
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
       SpotPrice: !If [HasSpotPrice, !Ref SpotPrice, !Ref 'AWS::NoValue']
       UserData:
@@ -827,23 +861,11 @@ Resources:
           #!/bin/bash -x
           bash -ex << "TRY"
             yum install -y nc nfs-utils aws-cfn-bootstrap
-            while ! nc -z ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com 2049; do sleep 5; done
-            sleep 5
-            mkdir /mnt/efs
-            mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 ${EFSFileSystem}.efs.${AWS::Region}.amazonaws.com:/ /mnt/efs/
-            chmod 1777 /mnt/efs
-            echo 'ECS_CLUSTER=${Cluster}' > /etc/ecs/ecs.config
-            echo 'ECS_ENGINE_AUTH_TYPE=${DockerAuthType}' >> /etc/ecs/ecs.config
-            echo 'ECS_ENGINE_AUTH_DATA=${DockerAuthData}' >> /etc/ecs/ecs.config
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfiguration --region ${AWS::Region}
           TRY
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
 
   AutoScalingGroup:
-    DependsOn:
-      - EFSMountTargetA
-      - EFSMountTargetB
-      - EFSMountTargetC
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       LaunchConfigurationName: !Ref LaunchConfiguration
@@ -860,7 +882,7 @@ Resources:
               - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
               - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
             TopicARN:
-              Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+              Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
         - !Ref 'AWS::NoValue'
       VPCZoneIdentifier: !Split
         - ','
@@ -868,7 +890,7 @@ Resources:
             !Sub '${ParentVPCStack}-SubnetsPrivate'
       Tags:
         - Key: Name
-          Value: 'ecs-cluster'
+          Value: !Ref 'AWS::StackName'
           PropagateAtLaunch: true
     CreationPolicy:
       ResourceSignal:
@@ -898,7 +920,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 80
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
@@ -906,7 +928,7 @@ Resources:
   AutoScalingGroupLifecycleHookQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-lifecycle-hook'
+      QueueName: !Sub "${AWS::StackName}-lifecycle-hook"
       VisibilityTimeout: !Ref DrainingTimeoutInSeconds
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt 'AutoScalingGroupLifecycleHookDeadLetterQueue.Arn'
@@ -925,7 +947,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 600
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: QueueName
           Value: !GetAtt 'AutoScalingGroupLifecycleHookQueue.QueueName'
@@ -933,7 +955,7 @@ Resources:
   AutoScalingGroupLifecycleHookDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub '${AWS::StackName}-lifecycle-hook-dlq'
+      QueueName: !Sub "${AWS::StackName}-lifecycle-hook-dlq"
 
   AutoScalingGroupLifecycleHookDeadLetterQueueTooHighAlarm:
     Condition: HasAlertTopic
@@ -948,7 +970,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: QueueName
           Value: !GetAtt 'AutoScalingGroupLifecycleHookDeadLetterQueue.QueueName'
@@ -1056,7 +1078,7 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 90
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
 
   CPUUtilizationTooHighAlarm:
     Condition: HasAlertTopic
@@ -1074,7 +1096,7 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 80
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
 
   MemoryReservationTooHighAlarm:
     Condition: HasAlertTopic
@@ -1092,7 +1114,7 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 90
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
 
   MemoryUtilizationTooHighAlarm:
     Condition: HasAlertTopic
@@ -1110,7 +1132,7 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 80
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
 
   SchedulableContainersRule:
     Type: AWS::Events::Rule
@@ -1138,7 +1160,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: RuleName
           Value: !Ref SchedulableContainersRule
@@ -1165,7 +1187,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: RuleName
           Value: !Ref SchedulableContainersCron
@@ -1189,7 +1211,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
         - PolicyName: ecs
           PolicyDocument:
             Statement:
@@ -1316,7 +1338,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: FunctionName
           Value: !Ref SchedulableContainersLambda
@@ -1334,155 +1356,74 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: FunctionName
           Value: !Ref SchedulableContainersLambda
 
-  EFSFileSystem:
-    Type: AWS::EFS::FileSystem
-    Properties:
-      FileSystemTags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-efs'
-
-  EFSFileSystemPercentIOLimitTooHighAlarm:
-    Condition: HasAlertTopic
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: 'Average IO utilization over last 10 minutes higher than 80%'
-      Namespace: 'AWS/EFS'
-      MetricName: PercentIOLimit
-      Statistic: Average
-      Period: 600
-      EvaluationPeriods: 1
-      ComparisonOperator: GreaterThanThreshold
-      Threshold: 80
-      AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
-      Dimensions:
-        - Name: FileSystemId
-          Value: !Ref EFSFileSystem
-
-  EFSFileSystemBurstCreditBalanceTooLowAlarm:
-    Condition: HasAlertTopic
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: 'EFS file system is running out of burst credits. You can expect a significant performance trop in the next hour.'
-      Namespace: 'AWS/EFS'
-      MetricName: BurstCreditLimit
-      Statistic: Average
-      Period: 600
-      EvaluationPeriods: 1
-      ComparisonOperator: LessThanThreshold
-      Threshold: 192416666667
-      AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
-      Dimensions:
-        - Name: FileSystemId
-          Value: !Ref EFSFileSystem
-
-  EFSMountTargetA:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetAPrivate'
-      SecurityGroups:
-        - !Ref EFSSecurityGroup
-
-  EFSMountTargetB:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetBPrivate'
-      SecurityGroups:
-        - !Ref EFSSecurityGroup
-
-  EFSMountTargetC:
-    Type: AWS::EFS::MountTarget
-    Properties:
-      FileSystemId: !Ref EFSFileSystem
-      SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetCPrivate'
-      SecurityGroups:
-        - !Ref EFSSecurityGroup
-
-  EFSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allowing access to EFS
-      VpcId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          SourceSecurityGroupId: !Ref SecurityGroup
 Outputs:
   StackName:
     Description: 'Stack name'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'
 
   Cluster:
     Description: 'ECS cluster.'
     Value: !Ref Cluster
     Export:
-      Name: !Sub '${AWS::StackName}-Cluster'
+      Name: !Sub "${AWS::StackName}-Cluster"
 
   LoadBalancerFullName:
     Description: 'ALB full name for services.'
     Value: !GetAtt 'LoadBalancer.LoadBalancerFullName'
     Export:
-      Name: !Sub '${AWS::StackName}-LoadBalancerFullName'
+      Name: !Sub "${AWS::StackName}-LoadBalancerFullName"
 
   HttpListener:
     Description: 'ALB HTTP listener for services.'
     Value: !Ref HttpListener
     Export:
-      Name: !Sub '${AWS::StackName}-HttpListener'
+      Name: !Sub "${AWS::StackName}-HttpListener"
 
   HttpsListener:
     Condition: HasLoadBalancerCertificateArn
     Description: 'ALB HTTPS listener for services.'
     Value: !Ref HttpsListener
     Export:
-      Name: !Sub '${AWS::StackName}-HttpsListener'
+      Name: !Sub "${AWS::StackName}-HttpsListener"
 
   CanonicalHostedZoneID:
     Description: 'The ID of the Amazon Route 53 hosted zone associated with the load balancer.'
     Value: !GetAtt LoadBalancer.CanonicalHostedZoneID
     Export:
-      Name: !Sub '${AWS::StackName}-CanonicalHostedZoneID'
+      Name: !Sub "${AWS::StackName}-CanonicalHostedZoneID"
 
   VPC:
     Description: 'VPC of ECS cluster.'
     Value:
-      Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+      Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
     Export:
-      Name: !Sub '${AWS::StackName}-VPC'
+      Name: !Sub "${AWS::StackName}-VPC"
 
   SecurityGroup:
     Description: 'Security Group of ECS cluster.'
     Value: !Ref SecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroup'
+      Name: !Sub "${AWS::StackName}-SecurityGroup"
 
   LogGroup:
     Description: 'Log group of ECS cluster.'
     Value: !Ref LogGroup
     Export:
-      Name: !Sub '${AWS::StackName}-LogGroup'
+      Name: !Sub "${AWS::StackName}-LogGroup"
 
   DNSName:
     Description: 'The DNS name for the ECS cluster load balancer.'
     Value: !GetAtt 'LoadBalancer.DNSName'
     Export:
-      Name: !Sub '${AWS::StackName}-DNSName'
+      Name: !Sub "${AWS::StackName}-DNSName"
 
   URL:
     Description: 'URL to the ECS cluster.'
-    Value: !Sub 'http://${LoadBalancer.DNSName}'
+    Value: !Sub "http://${LoadBalancer.DNSName}"
     Export:
-      Name: !Sub '${AWS::StackName}-URL'
+      Name: !Sub "${AWS::StackName}-URL"
