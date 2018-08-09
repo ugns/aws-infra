@@ -452,15 +452,15 @@ Resources:
       SecurityGroups:
         - !Ref ALBSecurityGroup
       Subnets: !If
-      - HasLoadBalancerSchemeInternal
-      - !Split
-        - ','
-        - Fn::ImportValue:
-            !Sub '${ParentVPCStack}-SubnetsPrivate'
-      - !Split
-        - ','
-        - Fn::ImportValue:
-            !Sub '${ParentVPCStack}-SubnetsPublic'
+        - HasLoadBalancerSchemeInternal
+        - !Split
+          - ','
+          - Fn::ImportValue:
+              !Sub '${ParentVPCStack}-SubnetsPrivate'
+        - !Split
+          - ','
+          - Fn::ImportValue:
+              !Sub '${ParentVPCStack}-SubnetsPublic'
 
   DefaultTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
