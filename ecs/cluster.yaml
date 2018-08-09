@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: 'ECS: Elastic Container Service cluster'
+Description: 'ECS: Elastic Container Service cluster with EFS volume'
 
 Metadata:
   AWS::CloudFormation::Interface:
