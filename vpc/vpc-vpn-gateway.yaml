@@ -10,6 +10,8 @@ Metadata:
           default: 'Parent Stacks'
         Parameters:
           - ParentVPCStack
+          - ParentAlertStack
+
       - Label:
           Default: 'VPN Parameters'
         Parameters:
@@ -20,6 +22,11 @@ Parameters:
   ParentVPCStack:
     Description: 'Stack name of parent VPC stack based on vpc/vpc-*azs.yaml template.'
     Type: String
+
+  ParentAlertStack:
+    Description: 'Optional but recommended stack name of parent alert stack based on operations/alert.yaml template.'
+    Type: String
+    Default: ''
 
   RemoteVpnDeviceIp:
     Description: 'External IP address of the Customer VPN Device.'
@@ -37,6 +44,9 @@ Parameters:
     Default: 192.168.100.0/24
     AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
     ConstraintDescription: Must be a valid CIDR range of the form x.x.x.x/x.
+
+Conditions:
+  HasAlertTopic: !Not [!Equals [!Ref ParentAlertStack, '']]
 
 Resources:
   VPNGateway:
@@ -116,8 +126,25 @@ Resources:
       RouteTableId:
         Fn::ImportValue: !Sub '${ParentVPCStack}-RouteTableCPrivate'
 
+  AlarmVpnConnectionTunnelState:
+    Condition: HasAlertTopic
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub 'VPN Connection ${VPNConnection} tunnel state down'
+      Namespace: 'AWS/VPN'
+      MetricName: TunnelState
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      ComparisonOperator: LessThanThreshold
+      Threshold: 1
+      AlarmActions:
+        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+      Dimensions:
+        - Name: VpnId
+          Value: !Ref VPNConnection
+
 Outputs:
   StackName:
     Description: 'Stack name'
     Value: !Sub '${AWS::StackName}'
-
