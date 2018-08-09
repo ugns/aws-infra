@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: 'ECS: cluster'
+Description: 'ECS: Elastic Container Service cluster'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -18,6 +18,7 @@ Metadata:
         - KeyName
         - DockerAuthType
         - DockerAuthData
+        - S3ConfigBucket
 
     - Label:
         default: 'Load Balancer Parameters'
@@ -71,8 +72,13 @@ Parameters:
   DockerAuthData:
     Description: 'Optional Docker private registry authentication JSON data'
     Type: String
-    # NoEcho: true
+    NoEcho: True
     Default: ''
+
+  S3ConfigBucket:
+    Description: 'S3 bucket used to pull down config files from'
+    Type: String
+    Default: aws-infra
 
   LoadBalancerScheme:
     Description: 'Indicates whether the load balancer in front of the ECS cluster is internet-facing or internal.'
@@ -497,7 +503,7 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
-          default: [ssm, awslogs, install]
+          default: [ssm, awslogs, install, anchore]
         ssm:
           packages:
             rpm:
@@ -785,6 +791,29 @@ Resources:
                   - /opt/lifecycle-poller/poller.conf
                   - /opt/lifecycle-poller/daemon.rb
                   - /opt/lifecycle-poller/worker.rb
+        anchore:
+          files:
+            /usr/local/etc/anchore/config.yaml:
+              source: !Sub "https://s3.amazonaws.com/${S3ConfigBucket}/anchore/config.yaml"
+              owner: root
+              group: root
+              mode: '000644'
+            /usr/local/etc/anchore/config-ui.yaml:
+              source: !Sub "https://s3.amazonaws.com/${S3ConfigBucket}/anchore/config-ui.yaml"
+              owner: root
+              group: root
+              mode: '000644'
+            /usr/local/etc/anchore/license.yaml:
+              source: !Sub "https://s3.amazonaws.com/${S3ConfigBucket}/anchore/license.yaml"
+              owner: root
+              group: root
+              mode: '000644'
+      AWS::CloudFormation::Authentication:
+        S3AccessCreds:
+          type: "S3"
+          roleName: !Ref Role
+          buckets:
+            - !Ref S3ConfigBucket
     Properties:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', ECSAMI]
       IamInstanceProfile: !Ref InstanceProfile
