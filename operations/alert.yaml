@@ -6,16 +6,17 @@ Description: 'Operations: Alert topic'
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-    - Label:
-        default: 'Alert Parameters'
-      Parameters:
-        - Email
-        - HttpEndpoint
-        - HttpsEndpoint
-    - Label:
-        default: 'Fallback Parameters'
-      Parameters:
-        - FallbackEmail
+      - Label:
+          default: 'Alert Parameters'
+        Parameters:
+          - Email
+          - HttpEndpoint
+          - HttpsEndpoint
+
+      - Label:
+          default: 'Fallback Parameters'
+        Parameters:
+          - FallbackEmail
 
 Parameters:
   Email:
