@@ -344,10 +344,10 @@ Resources:
       VpcId:
         Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
       SecurityGroupIngress:
-      - SourceSecurityGroupId: !Ref ALBSecurityGroup
-        FromPort: 0
-        ToPort: 65535
-        IpProtocol: tcp
+        - SourceSecurityGroupId: !Ref ALBSecurityGroup
+          FromPort: 0
+          ToPort: 65535
+          IpProtocol: tcp
 
   SecurityGroupInSSHWorld:
     Type: AWS::EC2::SecurityGroupIngress
@@ -479,8 +479,8 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-      - TargetGroupArn: !Ref DefaultTargetGroup
-        Type: forward
+        - TargetGroupArn: !Ref DefaultTargetGroup
+          Type: forward
       LoadBalancerArn: !Ref LoadBalancer
       Port: 80
       Protocol: HTTP
@@ -823,7 +823,7 @@ Resources:
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
       SpotPrice: !If [HasSpotPrice, !Ref SpotPrice, !Ref 'AWS::NoValue']
       UserData:
-        'Fn::Base64': !Sub |
+        Fn::Base64: !Sub |
           #!/bin/bash -x
           bash -ex << "TRY"
             yum install -y nc nfs-utils aws-cfn-bootstrap
