@@ -95,7 +95,7 @@ Resources:
       Encrypted: !If [HasEncryption, !Ref Encryption, !Ref 'AWS::NoValue']
       FileSystemTags:
         - Key: Name
-          Value: !Sub '${AWS::StackName}-efs'
+          Value: !Ref 'AWS::StackName'
       KmsKeyId: !If [HasEncryption, !Ref Key, !Ref 'AWS::NoValue']
       PerformanceMode: !Ref PerformanceMode
 
@@ -112,7 +112,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 80
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: FileSystemId
           Value: !Ref FileSystem
@@ -130,7 +130,7 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Threshold: 192416666667
       AlarmActions:
-        - Fn::ImportValue: !Sub '${ParentAlertStack}-TopicARN'
+        - Fn::ImportValue: !Sub "${ParentAlertStack}-TopicARN"
       Dimensions:
         - Name: FileSystemId
           Value: !Ref FileSystem
@@ -140,7 +140,7 @@ Resources:
     Properties:
       FileSystemId: !Ref FileSystem
       SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetAPrivate'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-SubnetAPrivate"
       SecurityGroups:
         - !Ref SecurityGroup
 
@@ -149,7 +149,7 @@ Resources:
     Properties:
       FileSystemId: !Ref FileSystem
       SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetBPrivate'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-SubnetBPrivate"
       SecurityGroups:
         - !Ref SecurityGroup
 
@@ -158,7 +158,7 @@ Resources:
     Properties:
       FileSystemId: !Ref FileSystem
       SubnetId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-SubnetCPrivate'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-SubnetCPrivate"
       SecurityGroups:
         - !Ref SecurityGroup
 
@@ -167,19 +167,30 @@ Resources:
     Properties:
       GroupDescription: Allowing access to EFS
       VpcId:
-        Fn::ImportValue: !Sub '${ParentVPCStack}-VPC'
+        Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
+
+  SecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: tcp
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !Ref SecurityGroup
 
 Outputs:
   StackName:
     Description: 'Stack name'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'
 
   SecurityGroup:
     Description: 'Security Group of EFS volume.'
     Value: !Ref SecurityGroup
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroup'
+      Name: !Sub "${AWS::StackName}-SecurityGroup"
 
   FileSystem:
     Description: 'The Elastic File System volume name.'
     Value: !Ref FileSystem
+    Export:
+      Name: !Sub "${AWS::StackName}-FileSystem"
