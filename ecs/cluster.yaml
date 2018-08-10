@@ -542,7 +542,7 @@ Resources:
               test: !Sub 'if mount | grep -q ${EFSDirectory}; then exit 1; else exit 0; fi'
             c_mountpount_fstab:
               command: !Sub
-                - 'echo ""${FileSystem}:/ ${EFSDirectory} efs defaults,_netdev 0 0" |tee -a /etc/fstab'
+                - 'echo "${FileSystem}:/ ${EFSDirectory} efs defaults,_netdev 0 0" |tee -a /etc/fstab'
                 - FileSystem: !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-FileSystem"}, '']
               test: !Sub 'if grep -q ${EFSDirectory} /etc/fstab; then exit 1; else exit 0; fi'
         ecs:
