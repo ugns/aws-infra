@@ -527,11 +527,6 @@ Resources:
           packages:
             rpm:
               amazon-ssm-agent: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
-          services:
-            sysvinit:
-              amazon-ssm-agent:
-                enabled: true
-                ensureRunning: true
         efsmount:
           packages:
             yum:
