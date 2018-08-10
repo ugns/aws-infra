@@ -20,6 +20,7 @@ Metadata:
         - DockerAuthType
         - DockerAuthData
         - S3ConfigBucket
+        - EFSDirectory
 
     - Label:
         default: 'Load Balancer Parameters'
@@ -85,6 +86,11 @@ Parameters:
     Description: 'S3 bucket used to pull down config files from'
     Type: String
     Default: aws-infra
+
+  EFSDirectory:
+    Description: 'Optional EFS mountpoint directory to use.'
+    Type: String
+    Default: /mnt/efs
 
   LoadBalancerScheme:
     Description: 'Indicates whether the load balancer in front of the ECS cluster is internet-facing or internal.'
@@ -527,13 +533,18 @@ Resources:
               'amazon-efs-utils': []
           commands:
             a_mountpoint_mkdir:
-              command: 'mkdir /mnt/efs'
-              test: '[ ! -d /mnt/efs ]'
+              command: !Sub 'mkdir ${EFSDirectory}'
+              test: !Sub '[ ! -d ${EFSDirectory} ]'
             b_mountpoint_mount:
               command: !Sub
-                - 'while ! (echo > /dev/tcp/${FileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 10; done && sleep 10 && mount -t efs ${FileSystem}:/ /mnt/efs && chmod 1777 /mnt/efs'
+                - 'while ! (echo > /dev/tcp/${FileSystem}.efs.${AWS::Region}.amazonaws.com/2049) >/dev/null 2>&1; do sleep 10; done && sleep 10 && mount -t efs ${FileSystem}:/ ${EFSDirectory} && chmod 1777 ${EFSDirectory}'
                 - FileSystem: !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-FileSystem"}, '']
-              test: 'if mount | grep -q /mnt/efs; then exit 1; else exit 0; fi'
+              test: !Sub 'if mount | grep -q ${EFSDirectory}; then exit 1; else exit 0; fi'
+            c_mountpount_fstab:
+              command: !Sub
+                - 'echo ""${FileSystem}:/ ${EFSDirectory} efs defaults,_netdev 0 0" |tee -a /etc/fstab'
+                - FileSystem: !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-FileSystem"}, '']
+              test: !Sub 'if grep -q ${EFSDirectory} /etc/fstab; then exit 1; else exit 0; fi'
         ecs:
           files:
             /etc/ecs/ecs.config:
