@@ -1,16 +1,16 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: 'VPC: legacy DNS zone, a cloudonaut.io template'
+Description: 'VPC: legacy Route53 hosted zone'
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-    - Label:
-        default: 'Zone Parameters'
-      Name:
-      - HostedZoneName
-      - HostedZoneId
+      - Label:
+          default: 'Zone Parameters'
+        Name:
+          - HostedZoneName
+          - HostedZoneId
 
 Parameters:
   HostedZoneName:
@@ -23,22 +23,22 @@ Parameters:
 
 Resources:
   Dummy:
-    Type: 'AWS::S3::Bucket'
+    Type: AWS::S3::Bucket
     Properties: {}
 
 Outputs:
   StackName:
     Description: 'Stack name'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'
 
   HostedZoneName:
     Description: 'The name of the hosted zone.'
     Value: !Ref HostedZoneName
     Export:
-      Name: !Sub '${AWS::StackName}-HostedZoneName'
+      Name: !Sub "${AWS::StackName}-HostedZoneName"
 
   HostedZoneId:
     Description: 'The ID of the hosted zone.'
     Value: !Ref HostedZoneId
     Export:
-      Name: !Sub '${AWS::StackName}-HostedZoneId'
+      Name: !Sub "${AWS::StackName}-HostedZoneId"

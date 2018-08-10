@@ -1,19 +1,20 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: 'VPC: private DNS zone'
+Description: 'VPC: private Route53 hosted zone'
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-    - Label:
-        default: 'Parent Stacks'
-      Parameters:
-      - ParentVPCStack
-    - Label:
-        default: 'Zone Parameters'
-      Name:
-      - Name
+      - Label:
+          default: 'Parent Stacks'
+        Parameters:
+          - ParentVPCStack
+
+      - Label:
+          default: 'Zone Parameters'
+        Name:
+          - Name
 
 Parameters:
   ParentVPCStack:
@@ -26,29 +27,29 @@ Parameters:
 
 Resources:
   HostedZone:
-    Type: 'AWS::Route53::HostedZone'
+    Type: AWS::Route53::HostedZone
     Properties:
       HostedZoneConfig:
         Comment: !Sub "${Name} private DNS zone"
       Name: !Ref Name
       VPCs:
-      - VPCId:
-          'Fn::ImportValue': !Sub '${ParentVPCStack}-VPC'
-        VPCRegion: !Ref 'AWS::Region'
+        - VPCId:
+            Fn::ImportValue: !Sub "${ParentVPCStack}-VPC"
+          VPCRegion: !Ref 'AWS::Region'
 
 Outputs:
   StackName:
     Description: 'Stack name'
-    Value: !Sub '${AWS::StackName}'
+    Value: !Ref 'AWS::StackName'
 
   HostedZoneName:
     Description: 'The name of the hosted zone.'
     Value: !Ref Name
     Export:
-      Name: !Sub '${AWS::StackName}-HostedZoneName'
+      Name: !Sub "${AWS::StackName}-HostedZoneName"
 
   HostedZoneId:
     Description: 'The ID of the hosted zone.'
     Value: !Ref HostedZone
     Export:
-      Name: !Sub '${AWS::StackName}-HostedZoneId'
+      Name: !Sub "${AWS::StackName}-HostedZoneId"
