@@ -218,7 +218,7 @@ Resources:
             Action:
               - iam:ListSSHPublicKeys
               - iam:GetSSHPublicKey
-            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:users/*"
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:user/*"
       Roles:
         - !Ref Role
 
@@ -349,11 +349,70 @@ Resources:
           files:
             /usr/local/sbin/authorized_keys_command:
               content: |
+                #!/usr/bin/env python
+
+                import boto3
+                import argparse
+
+                def get_authorized_keys(username):
+                    client = boto3.client('iam')
+
+                    UnsafeUserName = username
+                    UnsafeUserName = UnsafeUserName.replace('.plus.', '+')
+                    UnsafeUserName = UnsafeUserName.replace('.equal.', '=')
+                    UnsafeUserName = UnsafeUserName.replace('.comma.', ',')
+                    UnsafeUserName = UnsafeUserName.replace('.at.', '@')
+
+                    try:
+                        for key in client.list_ssh_public_keys(
+                            UserName=UnsafeUserName)['SSHPublicKeys']:
+                            if key['Status'] == 'Active':
+                                print client.get_ssh_public_key(
+                                    UserName=UnsafeUserName,
+                                    SSHPublicKeyId=key['SSHPublicKeyId'],
+                                    Encoding='SSH')['SSHPublicKey']['SSHPublicKeyBody']
+                    except:
+                        pass
+
+                if __name__ == '__main__':
+                    parser = argparse.ArgumentParser(prog='authorized_keys_command')
+                    parser.add_argument('username', help='IAM User to retrieve SSH keys for')
+                    args = parser.parse_args()
+                    get_authorized_keys(args.username)
               mode: '000755'
               owner: root
               group: root
             /usr/local/sbin/import_users:
               content: |
+                #!/usr/bin/env python
+
+                import os
+                import boto3
+                from pwd import getpwnam
+
+                def import_users():
+                    client = boto3.client('iam')
+
+                    for user in client.list_users()['Users']:
+                        SafeUserName = user['UserName']
+                        SafeUserName = SafeUserName.replace('+', '.plus.')
+                        SafeUserName = SafeUserName.replace('=', '.equal.')
+                        SafeUserName = SafeUserName.replace(',', '.comma.')
+                        SafeUserName = SafeUserName.replace('@', '.at.')
+
+                        try:
+                            if len(SafeUserName) < 32:
+                                try:
+                                    user = getpwnam(SafeUserName)
+                                except:
+                                    returnCode = os.system('/usr/sbin/useradd {}'.format(SafeUserName))
+                            else:
+                                print 'Can not import IAM user {}. User name is longer than 32 characters.'.format(SafeUserName)
+                        except:
+                            pass
+
+                if __name__ == '__main__':
+                    import_users()
               mode: '000755'
               owner: root
               group: root
