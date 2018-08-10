@@ -213,7 +213,7 @@ Resources:
           - Effect: Allow
             Action:
               - iam:ListUsers
-            Resources: '*'
+            Resource: '*'
           - Effect: Allow
             Action:
               - iam:ListSSHPublicKeys
