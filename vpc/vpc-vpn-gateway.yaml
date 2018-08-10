@@ -126,6 +126,36 @@ Resources:
       RouteTableId:
         Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableCPrivate"
 
+  PublicARoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Sub "${RemoteVpnDeviceIp}/32"
+      GatewayId: !Ref VPNGateway
+      RouteTableId:
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableAPublic"
+
+  PublicBRoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Sub "${RemoteVpnDeviceIp}/32"
+      GatewayId: !Ref VPNGateway
+      RouteTableId:
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableBPublic"
+
+  PublicCRoute:
+    DependsOn:
+      - VPNConnection
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: !Sub "${RemoteVpnDeviceIp}/32"
+      GatewayId: !Ref VPNGateway
+      RouteTableId:
+        Fn::ImportValue: !Sub "${ParentVPCStack}-RouteTableCPublic"
+
   AlarmVpnConnectionTunnelState:
     Condition: HasAlertTopic
     Type: AWS::CloudWatch::Alarm
