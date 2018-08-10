@@ -6,46 +6,46 @@ Description: 'ECS: Elastic Container Service cluster'
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-    - Label:
-        default: 'Parent Stacks'
-      Parameters:
-        - ParentVPCStack
-        - ParentEFSStack
-        - ParentAlertStack
+      - Label:
+          default: 'Parent Stacks'
+        Parameters:
+          - ParentVPCStack
+          - ParentEFSStack
+          - ParentAlertStack
 
-    - Label:
-        default: 'EC2 Parameters'
-      Parameters:
-        - KeyName
-        - DockerAuthType
-        - DockerAuthData
-        - S3ConfigBucket
-        - EFSDirectory
+      - Label:
+          default: 'EC2 Parameters'
+        Parameters:
+          - KeyName
+          - DockerAuthType
+          - DockerAuthData
+          - S3ConfigBucket
+          - EFSDirectory
 
-    - Label:
-        default: 'Load Balancer Parameters'
-      Parameters:
-        - LoadBalancerScheme
-        - LoadBalancerCertificateArn
+      - Label:
+          default: 'Load Balancer Parameters'
+        Parameters:
+          - LoadBalancerScheme
+          - LoadBalancerCertificateArn
 
-    - Label:
-        default: 'Cluster Parameters'
-      Parameters:
-        - InstanceType
-        - SpotPrice
-        - LogsRetentionInDays
-        - MaxSize
-        - MinSize
-        - DesiredCapacity
-        - DrainingTimeoutInSeconds
+      - Label:
+          default: 'Cluster Parameters'
+        Parameters:
+          - InstanceType
+          - SpotPrice
+          - LogsRetentionInDays
+          - MaxSize
+          - MinSize
+          - DesiredCapacity
+          - DrainingTimeoutInSeconds
 
-    - Label:
-        default: 'Cluster Scaling Parameters'
-      Parameters:
-        - ContainerMaxCPU
-        - ContainerMaxMemory
-        - ContainerShortageThreshold
-        - ContainerExcessThreshold
+      - Label:
+          default: 'Cluster Scaling Parameters'
+        Parameters:
+          - ContainerMaxCPU
+          - ContainerMaxMemory
+          - ContainerShortageThreshold
+          - ContainerExcessThreshold
 
 Parameters:
   ParentVPCStack:
@@ -77,18 +77,18 @@ Parameters:
       - 'docker'
 
   DockerAuthData:
-    Description: 'Optional Docker private registry authentication JSON data'
+    Description: 'Optional Docker private registry authentication JSON data.'
     Type: String
     NoEcho: True
     Default: ''
 
   S3ConfigBucket:
-    Description: 'S3 bucket used to pull down config files from'
+    Description: 'S3 bucket used to pull down config files from.'
     Type: String
     Default: aws-infra
 
   EFSDirectory:
-    Description: 'Optional EFS mountpoint directory to use.'
+    Description: 'Optional EFS mountpoint directory to use. Requires ParentEFSStack parameter!'
     Type: String
     Default: /mnt/efs
 
@@ -527,6 +527,11 @@ Resources:
           packages:
             rpm:
               amazon-ssm-agent: https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+          services:
+            sysvinit:
+              amazon-ssm-agent:
+                enabled: true
+                ensureRunning: true
         efsmount:
           packages:
             yum:
