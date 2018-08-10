@@ -149,6 +149,7 @@ Resources:
     Properties:
       GroupSet:
         - !Ref SecurityGroup
+        - !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-SecurityGroup"}, !Ref 'AWS::NoValue']
       SubnetId:
         Fn::ImportValue: !Sub "${ParentVPCStack}-Subnet${SubnetZone}Public"
 
@@ -347,9 +348,6 @@ Resources:
       ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
       IamInstanceProfile: !Ref InstanceProfile
       InstanceType: !Ref InstanceType
-      SecurityGroups:
-        - !Ref SecurityGroup
-        - !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-SecurityGroup"}, !Ref 'AWS::NoValue']
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
       NetworkInterfaces:
         - DeviceIndex: '0'
