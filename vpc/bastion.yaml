@@ -219,8 +219,8 @@ Resources:
               - iam:ListSSHPublicKeys
               - iam:GetSSHPublicKey
             Resource: !Sub "arn:aws:iam::${AWS::AccountId}:users/*"
-        Roles:
-          - !Ref Role
+      Roles:
+        - !Ref Role
 
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
