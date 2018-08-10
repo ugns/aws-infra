@@ -17,12 +17,13 @@ Metadata:
       - Label:
           default: 'EC2 Parameters'
         Parameters:
-          - KeyName
           - InstanceType
-          - SubnetZone
+          - KeyName
+          - IAMUserAccess
           - LogsRetentionInDays
           - EFSDirectory
           - Hostname
+          - SubnetZone
 
 Parameters:
   ParentVPCStack:
@@ -48,6 +49,12 @@ Parameters:
     Description: 'Optional key pair of the ec2-user to establish a SSH connection to the EC2 instances of the ECS cluster.'
     Type: AWS::EC2::KeyPair::KeyName
     Default: ''
+
+  IAMUserAccess:
+    Description: 'Syncronize IAM users and their public SSH keys'
+    Type: String
+    Default: false
+    AllowedValues: [true, false]
 
   InstanceType:
     Description: 'The instance type of the EC2 instances of the ECS cluster.'
@@ -114,6 +121,7 @@ Mappings:
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+  HasIAMUserAccess: !Equals [!Ref IAMUserAccess, 'true']
   HasHostname: !Not [!Equals [!Ref Hostname, '']]
   HasEFSVolume: !Not [!Equals [!Ref ParentEFSStack, '']]
   HasZone: !Not [!Equals [!Ref ParentZoneStack, '']]
@@ -194,6 +202,26 @@ Resources:
                   - logs:DescribeLogStreams
                 Resource: !Sub "arn:aws:logs:${AWS::Region}:*:*"
 
+  IAMUserAccessPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasIAMUserAccess
+    Properties:
+      PolicyName: iam
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - iam:ListUsers
+            Resources: '*'
+          - Effect: Allow
+            Action:
+              - iam:ListSSHPublicKeys
+              - iam:GetSSHPublicKey
+            Resource: !Sub "arn:aws:iam::${AWS::AccountId}:users/*"
+        Roles:
+          - !Ref Role
+
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -215,6 +243,7 @@ Resources:
             - ssm
             - awslogs
             - !If [HasEFSVolume, efsmount, !Ref 'AWS::NoValue']
+            - !If [HasIAMUserAccess, iamusers, !Ref 'AWS::NoValue']
             - install
         ssm:
           packages:
@@ -313,6 +342,42 @@ Resources:
                 - 'echo "${FileSystem}:/ ${EFSDirectory} efs defaults,_netdev 0 0" |tee -a /etc/fstab'
                 - FileSystem: !If [HasEFSVolume, {'Fn::ImportValue': !Sub "${ParentEFSStack}-FileSystem"}, '']
               test: !Sub 'if grep -q ${EFSDirectory} /etc/fstab; then exit 1; else exit 0; fi'
+        iamusers:
+          packages:
+            yum:
+              'python27-boto3': []
+          files:
+            /usr/local/sbin/authorized_keys_command:
+              content: |
+              mode: '000755'
+              owner: root
+              group: root
+            /usr/local/sbin/import_users:
+              content: |
+              mode: '000755'
+              owner: root
+              group: root
+            /etc/cron.d/import_users:
+              content: |
+                */10 * * * * root /usr/local/sbin/import_users
+              mode: '000644'
+              owner: root
+              group: root
+          commands:
+            a_sshd_command:
+              command: 'sed -i "s|#AuthorizedKeysCommand none|AuthorizedKeysCommand /usr/local/sbin/authorized_keys_command|g" /etc/ssh/sshd_config'
+            b_sshd_commanduser:
+              command: 'sed -i "s|#AuthorizedKeysCommandUser nobody|AuthorizedKeysCommandUser nobody|g" /etc/ssh/sshd_config'
+            c_import_users:
+              command: '/usr/local/sbin/import_users'
+          services:
+            sysvinit:
+              sshd:
+                enabled: true
+                ensureRunning: true
+                commands:
+                  - a_sshd_command
+                  - b_sshd_commanduser
         install:
           files:
             /etc/cfn/cfn-hup.conf:
