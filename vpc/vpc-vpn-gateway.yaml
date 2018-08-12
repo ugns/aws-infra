@@ -13,7 +13,7 @@ Metadata:
           - ParentAlertStack
 
       - Label:
-          Default: 'VPN Parameters'
+          default: 'VPN Parameters'
         Parameters:
           - RemoteVpnDeviceIp
           - RemoteNetworkCidr
